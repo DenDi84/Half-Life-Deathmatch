@@ -1,0 +1,6 @@
+"UnlitGeneric"
+{
+	"$basetexture" "particles/oldblood"
+	"$translucent" 1
+	$color		"{ 255 0 0 }"
+}

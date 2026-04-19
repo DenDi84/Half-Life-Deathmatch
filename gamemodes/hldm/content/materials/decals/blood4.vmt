@@ -1,0 +1,7 @@
+"UnlitGeneric"
+{
+	"$translucent" 1
+	"$basetexture" "Decals/Blood4"
+	"$decalscale" 0.5
+	"$modelmaterial" "decals/Blood4"
+}
