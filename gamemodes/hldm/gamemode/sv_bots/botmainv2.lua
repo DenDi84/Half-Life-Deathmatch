@@ -328,7 +328,7 @@ local function GetBestTarget(bot)
 
             local dist = botPos:DistToSqr(ply:GetPos())
             
-            if (bot:Visible(ply) or bot:VisibleVec(ply:GetShootPos())) and dist < minEnemyDist then
+            if (bot:Visible(ply) or bot:VisibleVec(ply:GetShootPos())) and dist < minEnemyDist and not ply.BestFriend then
                 minEnemyDist = dist
                 bestEnemy = ply
             end
@@ -525,15 +525,31 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
         local nextArea = data.path[1]
         
         if IsValid(nextArea) then
-            local nextPos = nextArea:GetCenter()
+            local nextPos
             
             if #data.path == 1 then
+                -- Last waypoint: move directly to the target itself
                 nextPos = targetPos
+            elseif #data.path >= 2 and IsValid(data.path[2]) then
+                -- Use the closest point on the edge between current waypoint and the NEXT one
+                -- This makes the bot "cut corners" and flow smoothly through the path
+                local areaAfter = data.path[2]
+                local edgePoint = nextArea:GetClosestPointOnArea(areaAfter:GetCenter())
+                
+                -- Blend toward the next-next area center to smooth the trajectory
+                local pullTarget = areaAfter:GetCenter()
+                nextPos = LerpVector(0.3, edgePoint, pullTarget)
+                nextPos.z = edgePoint.z -- Keep Z from the edge (more accurate for height)
+            else
+                nextPos = nextArea:GetCenter()
             end
             
+            -- Check if we've reached this waypoint
+            -- Use the area's Contains check OR a generous 2D distance so the bot doesn't overshoot
             local dist2D = (Vector(botPos.x, botPos.y, 0) - Vector(nextPos.x, nextPos.y, 0)):LengthSqr()
             
-            if dist2D < 2500 or nextArea:Contains(botPos + Vector(0, 0, 5)) then
+            if nextArea:Contains(botPos + Vector(0, 0, 5)) or dist2D < 1600 then
+                -- Reached waypoint, advance to next
                 table.remove(data.path, 1)
             else
                 moveToPos = nextPos
@@ -971,6 +987,48 @@ end)
 concommand.Add("hldm_addbot", function(ply, cmd, args)
     if not ply:IsAdmin() then return end
     RunConsoleCommand("bot")
+end)
+
+concommand.Add("hldm_addspecialbots", function(ply, cmd, args)
+    if not IsValid(ply) or not ply:IsAdmin() then return end
+
+    local names = {"Mave", "Rick"}
+    local index = 0
+
+    local function SpawnNext()
+        index = index + 1
+        local name = names[index]
+        if not name then return end -- все боты заспавнены
+
+        -- снимок ботов до спавна
+        local before = {}
+        for _, bot in ipairs(player.GetBots()) do
+            before[bot] = true
+        end
+
+        RunConsoleCommand("bot")
+
+        -- даём боту тик на инициализацию, потом ищем новенького
+        timer.Simple(0.2, function()
+            local found = false
+            for _, bot in ipairs(player.GetBots()) do
+                if IsValid(bot) and not before[bot] then
+                    bot:SetNWString("SpecialBotName", name)
+                    bot.BestFriend = true
+                    found = true
+                    break
+                end
+            end
+
+            if not found then
+                print("[hldm_addspecialbots] Не удалось найти нового бота для имени '" .. name .. "' — возможно, нет свободных слотов.")
+            end
+
+            SpawnNext() -- переходим к следующему имени
+        end)
+    end
+
+    SpawnNext()
 end)
 
 concommand.Add("hldm_removeallbots", function(ply, cmd, args)

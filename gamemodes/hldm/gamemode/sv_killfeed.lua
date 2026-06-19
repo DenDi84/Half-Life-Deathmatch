@@ -20,6 +20,12 @@ hook.Add("PlayerDeath", "SendKillfeedEntry", function(victim, inflictor, attacke
     end
 
     local victimName = victim:Nick()
+
+    if victim:IsBot() and victim:GetNWString("SpecialBotName") then
+        victimName = victim:GetNWString("SpecialBotName")
+    else
+        victimName = victim:Nick()
+    end
     local attackerName = "The World"
     local weaponClass = "worldspawn" 
 
@@ -28,7 +34,11 @@ hook.Add("PlayerDeath", "SendKillfeedEntry", function(victim, inflictor, attacke
             attackerName = "" 
             
         else
-            attackerName = attacker:Nick()
+            if attacker:IsBot() and attacker:GetNWString("SpecialBotName") then
+                attackerName = attacker:GetNWString("SpecialBotName")
+            else
+                attackerName = attacker:Nick()
+            end
             local wep = attacker:GetActiveWeapon()
             if IsValid(wep) then
                 weaponClass = wep:GetClass()

@@ -38,7 +38,7 @@ function Scoreboard(toggle)
         local itemHeight = Panel:GetTall() * 0.025
         local specnames = {}
 
-        for k,v in pairs(plysforsort) do
+        for k,v in ipairs(plysforsort) do
             if not v:IsValid() then return end
             if not v:GetNWBool("IsSpectator", false) then 
                 local playerpanel = vgui.Create("DPanel", Panel)
@@ -50,7 +50,10 @@ function Scoreboard(toggle)
                             surface.SetDrawColor(Color(250,140,0,20))
                             surface.DrawRect(0, 0, w, h)
                         end
-                    local name = v:Name()
+                    local name = v:Nick()
+                    if v:IsBot() and v:GetNWString("SpecialBotName") != "" then
+                        name = v:GetNWString("SpecialBotName")
+                    end
                     local frags = v:Frags()
                     local deaths = v:Deaths()
                     local ping = v:Ping()

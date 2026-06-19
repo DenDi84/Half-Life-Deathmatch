@@ -254,6 +254,12 @@ function GM:PlayerDeath(victim, inflictor, attacker)
     end
     self:SpawnWeaponBox(victim, deathPos, weaponClass)
 
+    timer.Create("PlayerDeathTimer" .. victim:EntIndex(), 5, 1, function()
+        if IsValid(victim) and not victim:Alive() then
+            victim:Spawn()
+        end
+    end)
+
 end
 
 local OrigCleanUpMap = game.CleanUpMap
