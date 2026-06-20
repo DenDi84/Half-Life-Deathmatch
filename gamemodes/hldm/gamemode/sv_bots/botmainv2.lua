@@ -320,15 +320,48 @@ local function GetBestTarget(bot)
         end
     end
 
+    local isArmed = false
+    for _, wep in ipairs(bot:GetWeapons()) do
+        local class = wep:GetClass()
+        if class ~= "weapon_hl1_crowbar" and class ~= "weapon_hl1_glock" then
+            local priority = ItemPriority[class] or 0
+            if priority >= 70 then
+                isArmed = true
+                break
+            end
+        end
+    end
+
+    local mateTarget = nil
+    if bot.BestFriend then
+        -- Find the mate
+        local mate = nil
+        for _, p in ipairs(player.GetAll()) do
+            if p ~= bot and p.BestFriend and p:Alive() and not p:GetNWBool("IsSpectator", false) then
+                mate = p
+                break
+            end
+        end
+        
+        if mate then
+            local mateData = GetBotData(mate)
+            if IsValid(mateData.target) and mateData.target:IsPlayer() and mateData.target:Alive() then
+                mateTarget = mateData.target
+            end
+        end
+    end
+
     local bestEnemy = nil
     local minEnemyDist = math.huge
     
     for _, ply in ipairs(player.GetAll()) do
         if ply ~= bot and ply:Alive() and not ply:GetNWBool("IsSpectator", false) then
+            -- DO NOT ATTACK MATE
+            if bot.BestFriend and ply.BestFriend then continue end
 
             local dist = botPos:DistToSqr(ply:GetPos())
             
-            if (bot:Visible(ply) or bot:VisibleVec(ply:GetShootPos())) and dist < minEnemyDist and not ply.BestFriend then
+            if (bot:Visible(ply) or bot:VisibleVec(ply:GetShootPos())) and dist < minEnemyDist then
                 minEnemyDist = dist
                 bestEnemy = ply
             end
@@ -339,6 +372,10 @@ local function GetBestTarget(bot)
         return bestEnemy 
     end
 
+    if isArmed and IsValid(mateTarget) then
+        return mateTarget
+    end
+
     local nearbyEnts = ents.FindInSphere(botPos, SEARCH_RADIUS)
     local bestItem = FindBestItem(bot, nearbyEnts, 10000, data)
     
@@ -346,11 +383,18 @@ local function GetBestTarget(bot)
         return bestItem 
     end
 
+    if isArmed and mate and mate:Alive() then
+        if botPos:DistToSqr(mate:GetPos()) > (1500 * 1500) then
+            return mate
+        end
+    end
+
     local fallbackEnemy = nil
     local fallbackDist = math.huge
     
     for _, ply in ipairs(player.GetAll()) do
         if ply ~= bot and ply:Alive() and not ply:GetNWBool("IsSpectator", false) then
+            if bot.BestFriend and ply.BestFriend then continue end
             if data.unreachableTargets and data.unreachableTargets[ply] then continue end
 
             local dist = botPos:DistToSqr(ply:GetPos())
@@ -369,7 +413,6 @@ local function GetBestTarget(bot)
     local bestAnyItem = FindBestItem(bot, allEnts, 50000, data)
 
     return bestAnyItem
-    
 end
 
 local function SelectBestWeapon(bot)
@@ -528,28 +571,21 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             local nextPos
             
             if #data.path == 1 then
-                -- Last waypoint: move directly to the target itself
                 nextPos = targetPos
             elseif #data.path >= 2 and IsValid(data.path[2]) then
-                -- Use the closest point on the edge between current waypoint and the NEXT one
-                -- This makes the bot "cut corners" and flow smoothly through the path
                 local areaAfter = data.path[2]
                 local edgePoint = nextArea:GetClosestPointOnArea(areaAfter:GetCenter())
                 
-                -- Blend toward the next-next area center to smooth the trajectory
                 local pullTarget = areaAfter:GetCenter()
                 nextPos = LerpVector(0.3, edgePoint, pullTarget)
-                nextPos.z = edgePoint.z -- Keep Z from the edge (more accurate for height)
+                nextPos.z = edgePoint.z 
             else
                 nextPos = nextArea:GetCenter()
             end
             
-            -- Check if we've reached this waypoint
-            -- Use the area's Contains check OR a generous 2D distance so the bot doesn't overshoot
             local dist2D = (Vector(botPos.x, botPos.y, 0) - Vector(nextPos.x, nextPos.y, 0)):LengthSqr()
             
             if nextArea:Contains(botPos + Vector(0, 0, 5)) or dist2D < 1600 then
-                -- Reached waypoint, advance to next
                 table.remove(data.path, 1)
             else
                 moveToPos = nextPos
@@ -782,13 +818,17 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
     
     local stopDistance = ITEM_PICKUP_RANGE * ITEM_PICKUP_RANGE 
     if data.target:IsPlayer() and ply:Visible(data.target) then
-        local dist2D = (Vector(botPos.x, botPos.y, 0) - Vector(targetPos.x, targetPos.y, 0)):LengthSqr()
-        distToTarget = dist2D
-        
-        if ply:GetActiveWeapon():GetClass() == "weapon_hl1_crowbar" or ply:GetActiveWeapon():GetClass() == "weapon_hl1_shotgun" then
-            stopDistance = COMBAT_RANGE * 3 
+        if data.target.BestFriend and ply.BestFriend then
+            stopDistance = 300 * 300
         else
-            stopDistance = COMBAT_RANGE * COMBAT_RANGE
+            local dist2D = (Vector(botPos.x, botPos.y, 0) - Vector(targetPos.x, targetPos.y, 0)):LengthSqr()
+            distToTarget = dist2D
+            
+            if ply:GetActiveWeapon():GetClass() == "weapon_hl1_crowbar" or ply:GetActiveWeapon():GetClass() == "weapon_hl1_shotgun" then
+                stopDistance = COMBAT_RANGE * 3 
+            else
+                stopDistance = COMBAT_RANGE * COMBAT_RANGE
+            end
         end
     end
     
@@ -929,7 +969,8 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
     else
         cmd:ClearMovement()
         
-        local isVisible = data.target:IsPlayer() and (ply:Visible(data.target) or ply:VisibleVec(data.target:GetShootPos()))
+        local isMate = data.target:IsPlayer() and data.target.BestFriend and ply.BestFriend
+        local isVisible = data.target:IsPlayer() and not isMate and (ply:Visible(data.target) or ply:VisibleVec(data.target:GetShootPos()))
         
         if isVisible then
             
@@ -998,7 +1039,7 @@ concommand.Add("hldm_addspecialbots", function(ply, cmd, args)
     local function SpawnNext()
         index = index + 1
         local name = names[index]
-        if not name then return end -- все боты заспавнены
+        if not name then return end
 
         -- снимок ботов до спавна
         local before = {}
@@ -1008,7 +1049,6 @@ concommand.Add("hldm_addspecialbots", function(ply, cmd, args)
 
         RunConsoleCommand("bot")
 
-        -- даём боту тик на инициализацию, потом ищем новенького
         timer.Simple(0.2, function()
             local found = false
             for _, bot in ipairs(player.GetBots()) do
@@ -1024,7 +1064,7 @@ concommand.Add("hldm_addspecialbots", function(ply, cmd, args)
                 print("[hldm_addspecialbots] Не удалось найти нового бота для имени '" .. name .. "' — возможно, нет свободных слотов.")
             end
 
-            SpawnNext() -- переходим к следующему имени
+            SpawnNext()
         end)
     end
 
