@@ -9,16 +9,16 @@ local ItemPriority = {
     ["weapon_hl1_hornetgun"] = 70,
     ["weapon_hl1_glock"] = 50,
     ["weapon_hl1_crowbar"] = 10,
-    
+
     ["weapon_hl1_handgrenade"] = 65,
     ["weapon_hl1_satchel"] = 70,
     ["weapon_hl1_tripmine"] = 60,
     ["weapon_hl1_snark"] = 55,
-    
+
     ["hl1_item_healthkit"] = 90,
     ["hl1_item_battery"] = 85,
     ["hl1_item_longjump"] = 75,
-    
+
     ["hl1_ammo_9mmar"] = 30,
     ["hl1_ammo_9mmbox"] = 30,
     ["hl1_ammo_9mmclip"] = 25,
@@ -74,13 +74,13 @@ end)
 local function FindPath(startPos, endPos)
     local startArea = navmesh.GetNearestNavArea(startPos)
     local endArea = navmesh.GetNearestNavArea(endPos)
-    
-    if not IsValid(startArea) or not IsValid(endArea) then 
-        return nil 
+
+    if not IsValid(startArea) or not IsValid(endArea) then
+        return nil
     end
-    
-    if startArea == endArea then 
-        return { endArea } 
+
+    if startArea == endArea then
+        return { endArea }
     end
 
     local openSet = { startArea }
@@ -93,7 +93,7 @@ local function FindPath(startPos, endPos)
     gScore[startID] = 0
     fScore[startID] = startPos:DistToSqr(endPos)
     openSetLookup[startID] = true
-    
+
     local iterations = 0
     local maxIterations = 300
 
@@ -128,12 +128,12 @@ local function FindPath(startPos, endPos)
         openSetLookup[current:GetID()] = nil
 
         for _, neighbor in pairs(current:GetAdjacentAreas()) do
-            
+
             if IsValid(neighbor) and current:IsConnected(neighbor) then
-                
+
                 local nID = neighbor:GetID()
                 local cID = current:GetID()
-                
+
                 local dist = current:GetCenter():DistToSqr(neighbor:GetCenter())
                 local tentative_gScore = (gScore[cID] or math.huge) + dist
 
@@ -149,22 +149,22 @@ local function FindPath(startPos, endPos)
                 end
             end
         end
-        
+
         for _, ladder in pairs(current:GetLadders()) do
             if IsValid(ladder) then
                 local neighbor = nil
                 if ladder:GetBottomArea() == current then
-                    neighbor = ladder:GetTopForwardArea() 
+                    neighbor = ladder:GetTopForwardArea()
                     if not IsValid(neighbor) then neighbor = ladder:GetTopLeftArea() end
                     if not IsValid(neighbor) then neighbor = ladder:GetTopRightArea() end
                 else
                     neighbor = ladder:GetBottomArea()
                 end
-                
+
                 if IsValid(neighbor) then
                     local nID = neighbor:GetID()
                     local cID = current:GetID()
-                    
+
                     local edgeCost = current:GetCenter():DistToSqr(neighbor:GetCenter())
                     local tentative_gScore = (gScore[cID] or math.huge) + edgeCost
 
@@ -187,31 +187,31 @@ end
 local function IsItemReachable(bot, item)
     local botPos = bot:GetPos()
     local itemPos = item:GetPos()
-    
+
     local botArea = navmesh.GetNearestNavArea(botPos)
     local itemArea = navmesh.GetNearestNavArea(itemPos,false,10)
-    
+
     if not IsValid(botArea) or not IsValid(itemArea) then
         return false
     end
-    
+
     local path = FindPath(botPos, itemPos)
-    
+
     if path and #path > 0 then
         local pathLength = 0
         for i = 1, #path - 1 do
             pathLength = pathLength + path[i]:GetCenter():Distance(path[i + 1]:GetCenter())
         end
-        
+
         local directDist = botPos:Distance(itemPos)
-        
+
         if pathLength > directDist * 3 then
             return false
         end
-        
+
         return true
     end
-    
+
     return false
 end
 
@@ -224,7 +224,7 @@ local function ScoreItem(ent, botPos, botHealth, botArmor, distanceDivisor, scor
         if botHealth == 100 then return -math.huge end
         priority = priority + math.abs(botHealth - 100)
         if botHealth < 50 then priority = priority + 50 end
-        
+
     elseif class == "hl1_item_battery" then
         if botArmor == 100 then return -math.huge end
         priority = priority + math.abs(botArmor - 100)
@@ -238,28 +238,28 @@ end
 
 local function CanBotPickup(bot, ent)
     if not IsValid(ent) then return false end
-    
+
     local class = ent:GetClass()
     local isWeapon = string.StartWith(class, "weapon_hl1_")
     local isItem   = string.StartWith(class, "hl1_item_")
     local isAmmo   = string.StartWith(class, "hl1_ammo_")
-    
+
     if not (isWeapon or isItem or isAmmo) then return false end
     if ent.Pickable == false then return false end
     if IsValid(ent:GetOwner()) then return false end
-    
+
     if isAmmo and ent.AmmoType and ent.MaxAmmo and bot:GetAmmoCount(ent.AmmoType) >= ent.MaxAmmo then
         return false
     end
-    
+
     if isWeapon and bot:HasWeapon(class) then
         local ammoType = ent:GetPrimaryAmmoType()
         local maxAmmo = ent.MaxAmmo
         if maxAmmo and bot:GetAmmoCount(ammoType) >= maxAmmo then return false end
     end
-    
+
     if class == "hl1_item_longjump" and bot:GetLongJump() then return false end
-    
+
     return true
 end
 
@@ -269,39 +269,39 @@ local function FindBestItem(bot, entList, distanceDivisor, data)
     local botArmor = bot:Armor()
     local scoreBias = data.scoreBias or 1.0
     local currentTarget = data.target
-    
+
     local bestItem = nil
     local bestScore = -math.huge
-    
+
     for _, ent in ipairs(entList) do
         if not IsValid(ent) then continue end
         if data.unreachableTargets[ent] then continue end
         if not CanBotPickup(bot, ent) then continue end
-        
+
         local score = ScoreItem(ent, botPos, botHealth, botArmor, distanceDivisor, scoreBias)
-        
+
         if bot:VisibleVec(ent:WorldSpaceCenter()) then
             score = score + 25
         end
-        
+
         if IsValid(currentTarget) and ent == currentTarget then
             score = score + 30
         end
-        
+
         if score > bestScore then
             bestScore = score
             bestItem = ent
         end
     end
-    
+
     return bestItem
 end
 
 local function GetBestAimPosition(bot, target)
     local center = target:WorldSpaceCenter()
-    
+
     if bot:VisibleVec(center) then return center end
-    
+
     local head = target:GetShootPos()
     if bot:VisibleVec(head) then return head end
     return center
@@ -311,9 +311,9 @@ local function GetBestTarget(bot)
     local botPos = bot:GetPos()
     local botHealth = bot:Health()
     local botArmor = bot:Armor()
-    
+
     local data = GetBotData(bot)
-    
+
     for ent, time in pairs(data.unreachableTargets or {}) do
         if CurTime() > time then
             data.unreachableTargets[ent] = nil
@@ -342,7 +342,7 @@ local function GetBestTarget(bot)
                 break
             end
         end
-        
+
         if mate then
             local mateData = GetBotData(mate)
             if IsValid(mateData.target) and mateData.target:IsPlayer() and mateData.target:Alive() then
@@ -353,23 +353,23 @@ local function GetBestTarget(bot)
 
     local bestEnemy = nil
     local minEnemyDist = math.huge
-    
+
     for _, ply in ipairs(player.GetAll()) do
         if ply ~= bot and ply:Alive() and not ply:GetNWBool("IsSpectator", false) then
             -- DO NOT ATTACK MATE
             if bot.BestFriend and ply.BestFriend then continue end
 
             local dist = botPos:DistToSqr(ply:GetPos())
-            
+
             if (bot:Visible(ply) or bot:VisibleVec(ply:GetShootPos())) and dist < minEnemyDist then
                 minEnemyDist = dist
                 bestEnemy = ply
             end
         end
     end
-    
-    if IsValid(bestEnemy) then 
-        return bestEnemy 
+
+    if IsValid(bestEnemy) then
+        return bestEnemy
     end
 
     if isArmed and IsValid(mateTarget) then
@@ -378,9 +378,9 @@ local function GetBestTarget(bot)
 
     local nearbyEnts = ents.FindInSphere(botPos, SEARCH_RADIUS)
     local bestItem = FindBestItem(bot, nearbyEnts, 10000, data)
-    
-    if IsValid(bestItem) then 
-        return bestItem 
+
+    if IsValid(bestItem) then
+        return bestItem
     end
 
     if isArmed and mate and mate:Alive() then
@@ -391,7 +391,7 @@ local function GetBestTarget(bot)
 
     local fallbackEnemy = nil
     local fallbackDist = math.huge
-    
+
     for _, ply in ipairs(player.GetAll()) do
         if ply ~= bot and ply:Alive() and not ply:GetNWBool("IsSpectator", false) then
             if bot.BestFriend and ply.BestFriend then continue end
@@ -422,7 +422,7 @@ local function SelectBestWeapon(bot)
 
     local currentWeapon = bot:GetActiveWeapon()
     local currentScore = -1
-    
+
     if IsValid(currentWeapon) then
         currentScore = ItemPriority[currentWeapon:GetClass()] or 0
         if currentWeapon:Clip1() == 0 and currentWeapon:GetMaxClip1() > 0 and currentWeapon:Ammo1() == 0 then
@@ -436,12 +436,12 @@ local function SelectBestWeapon(bot)
     for _, weapon in ipairs(bot:GetWeapons()) do
         local class = weapon:GetClass()
         local score = ItemPriority[class] or 0
-        
+
         if weapon:Clip1() == 0 and weapon:GetMaxClip1() > 0 and weapon:Ammo1() == 0 then
             score = 0
             if class == "weapon_hl1_crowbar" then score = 10 end
         end
-        
+
         if score > bestScore then
             bestScore = score
             bestWeapon = weapon
@@ -460,14 +460,14 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
     if GetConVar("bot_zombie"):GetInt() > 0 then return end
 
     cmd:ClearButtons()
-    
+
     local data = GetBotData(ply)
     local curTime = CurTime()
     local botPos = ply:GetPos()
 
     if curTime > data.nextThink then
         data.nextThink = curTime + THINK_INTERVAL
-        
+
         local opportunistic = nil
         for _, ent in ipairs(ents.FindInSphere(botPos, 150)) do
             if CanBotPickup(ply, ent) and not (data.unreachableTargets and data.unreachableTargets[ent]) then
@@ -479,26 +479,26 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 end
             end
         end
-        
+
         local newTarget
         if IsValid(opportunistic) then
             newTarget = opportunistic
         else
             newTarget = GetBestTarget(ply)
         end
-        
+
         if newTarget ~= data.target then
             data.target = newTarget
             data.nextPathCalc = 0
         end
-        
+
         SelectBestWeapon(ply)
     end
-    
+
     if curTime > data.lastStuckCheckTime + 1.5 then
         if data.lastStuckCheckPos and botPos:DistToSqr(data.lastStuckCheckPos) < 900 then
             data.stuckDuration = data.stuckDuration + 1.5
-            
+
             if data.stuckDuration >= 3.0 then
                 if IsValid(data.target) then
                     data.unreachableTargets = data.unreachableTargets or {}
@@ -511,7 +511,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 data.stuckDuration = 0
                 data.unstuckUntil = curTime + 1.5
                 data.unstuckYaw = math.random(0, 360)
-                
+
             elseif data.stuckDuration >= 1.5 then
                 if data.unstuckUntil < curTime then
                     data.unstuckUntil = curTime + 1.0
@@ -521,22 +521,22 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
         else
             data.stuckDuration = 0
         end
-        
+
         data.lastStuckCheckPos = Vector(botPos.x, botPos.y, botPos.z)
         data.lastStuckCheckTime = curTime
     end
 
     if curTime > data.nextPathCalc and IsValid(data.target) then
         data.nextPathCalc = curTime + PATH_RECALC_INTERVAL
-        
+
         local startArea = navmesh.GetNearestNavArea(botPos)
-        
+
         if not IsValid(startArea) then
              print("Bot off navmesh - pathing delayed")
              data.path = nil
         else
             local newPath = FindPath(botPos, data.target:GetPos())
-            
+
             if newPath then
                 local myArea = navmesh.GetNearestNavArea(botPos)
                 if IsValid(myArea) and newPath[1] == myArea and #newPath > 1 then
@@ -563,36 +563,36 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
 
     local targetPos = data.target:GetPos()
     local moveToPos = targetPos
-    
+
     if data.path and #data.path > 0 then
         local nextArea = data.path[1]
-        
+
         if IsValid(nextArea) then
             local nextPos
-            
+
             if #data.path == 1 then
                 nextPos = targetPos
             elseif #data.path >= 2 and IsValid(data.path[2]) then
                 local areaAfter = data.path[2]
                 local edgePoint = nextArea:GetClosestPointOnArea(areaAfter:GetCenter())
-                
+
                 local pullTarget = areaAfter:GetCenter()
                 nextPos = LerpVector(0.3, edgePoint, pullTarget)
-                nextPos.z = edgePoint.z 
+                nextPos.z = edgePoint.z
             else
                 nextPos = nextArea:GetCenter()
             end
-            
+
             local dist2D = (Vector(botPos.x, botPos.y, 0) - Vector(nextPos.x, nextPos.y, 0)):LengthSqr()
-            
+
             if nextArea:Contains(botPos + Vector(0, 0, 5)) or dist2D < 1600 then
                 table.remove(data.path, 1)
             else
                 moveToPos = nextPos
             end
-            
+
             data.navLookPos = Vector(moveToPos.x, moveToPos.y, moveToPos.z)
-            
+
             if math.abs(nextPos.z - botPos.z) < 40 then
                 moveToPos.z = botPos.z + 64
             else
@@ -602,13 +602,13 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             table.remove(data.path, 1)
         end
     end
-    
+
     local navLookPos = data.navLookPos or moveToPos
 
     local aimPos = navLookPos
     local turnSpeed = 0.1
     local snapPitch = false
-    
+
     if data.target:IsPlayer() and (ply:Visible(data.target) or ply:VisibleVec(data.target:GetShootPos())) then
         aimPos = GetBestAimPosition(ply, data.target)
         local combatAimAngle = (aimPos - ply:GetShootPos()):Angle()
@@ -622,7 +622,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
     else
         local lookDir = (navLookPos - ply:GetShootPos()):GetNormalized()
         local useableEnt = nil
-        
+
         local pathTrace = util.TraceHull({
             start = ply:GetShootPos(),
             endpos = ply:GetShootPos() + lookDir * 150,
@@ -630,14 +630,14 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             maxs = Vector(16, 16, 16),
             filter = ply
         })
-        
+
         if pathTrace.Hit and IsValid(pathTrace.Entity) then
             local class = pathTrace.Entity:GetClass()
             if string.find(class, "door") or string.find(class, "button") or string.find(class, "plat") then
                 useableEnt = pathTrace.Entity
             end
         end
-        
+
         if not IsValid(useableEnt) then
             local moveDir2D = (moveToPos - ply:GetShootPos()):GetNormalized()
             local pathTrace2 = util.TraceHull({
@@ -647,7 +647,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 maxs = Vector(20, 20, 32),
                 filter = ply
             })
-            
+
             if pathTrace2.Hit and IsValid(pathTrace2.Entity) then
                 local class = pathTrace2.Entity:GetClass()
                 if string.find(class, "door") or string.find(class, "button") or string.find(class, "plat") then
@@ -655,7 +655,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 end
             end
         end
-        
+
         local pathGoesUp = false
         if IsValid(data.target) then
             local destZ = data.target:GetPos().z
@@ -674,11 +674,11 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 end
             end
         end
-        
+
         if IsValid(nearbyButton) then
             useableEnt = nearbyButton
         end
-        
+
         if IsValid(useableEnt) then
             aimPos = useableEnt:WorldSpaceCenter()
             turnSpeed = 1.0
@@ -686,32 +686,32 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             debugoverlay.Line(ply:GetShootPos(), aimPos, 0.1, Color(255, 255, 0))
         end
     end
-    
+
     local aimAngle = (aimPos - ply:GetShootPos()):Angle()
     aimAngle.p = math.NormalizeAngle(aimAngle.p)
     aimAngle.y = math.NormalizeAngle(aimAngle.y)
     aimAngle.r = 0
-    
+
     local currentAngle = ply:EyeAngles()
-    
+
     local curP = math.NormalizeAngle(currentAngle.p)
     local aimP = math.NormalizeAngle(aimAngle.p)
     local curY = math.NormalizeAngle(currentAngle.y)
     local aimY = math.NormalizeAngle(aimAngle.y)
-    
+
     local diffP = math.AngleDifference(aimP, curP)
     local diffY = math.AngleDifference(aimY, curY)
-    
+
     local fractionP = math.Clamp(math.abs(diffP) / 60, 0, 1)
     local fractionY = math.Clamp(math.abs(diffY) / 60, 0, 1)
     if fractionP >= 0.95 then fractionP = 1 end
     if fractionY >= 0.95 then fractionY = 1 end
-    
+
     local easeP = math.ease.OutQuad(fractionP)
     local easeY = math.ease.OutQuad(fractionY)
-    
-    local baseSpeed = turnSpeed * 50 
-    
+
+    local baseSpeed = turnSpeed * 50
+
     local speedP = 4 + (baseSpeed * easeP)
     local speedY = 2 + (baseSpeed * easeY)
 
@@ -722,13 +722,13 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
         pitch = math.Approach(curP, aimP, speedP)
     end
     pitch = math.Clamp(pitch, -89, 89)
-    
+
     local yaw = math.ApproachAngle(currentAngle.y, aimAngle.y, speedY)
-    
+
     local smoothAngle = Angle(pitch, yaw, 0)
-    
+
     debugoverlay.Line(ply:GetShootPos(), ply:GetShootPos() + smoothAngle:Forward() * 1000, 0.1, Color(255, 0, 119))
-    
+
     cmd:SetViewAngles(smoothAngle)
     ply:SetEyeAngles(smoothAngle)
 
@@ -739,12 +739,12 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
         end
 
         if CurTime() > data.ladderJumpTimer then
-            data.ladderJumpTimer = nil 
-            
+            data.ladderJumpTimer = nil
+
             cmd:SetButtons(IN_JUMP)
-            
-            cmd:SetForwardMove(-200) 
-            
+
+            cmd:SetForwardMove(-200)
+
             return
         end
 
@@ -754,10 +754,10 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
         elseif IsValid(data.target) then
             destinationZ = data.target:GetPos().z
         end
-    
+
         local myZ = ply:GetPos().z
         local targetPitch = 0
-        
+
         if (data.ladderDirection or 0) == 0 then
             if destinationZ > myZ then
                 data.ladderDirection = -89
@@ -765,21 +765,21 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 data.ladderDirection = 89
             end
         end
-        
+
         targetPitch = data.ladderDirection
 
         local currentAng = ply:EyeAngles()
         local newPitch = math.ApproachAngle(currentAng.p, targetPitch, FrameTime() * 300)
-        
+
         local ladderYaw = currentAng.y
         local nearestArea = navmesh.GetNearestNavArea(botPos)
-        
+
         if IsValid(nearestArea) then
             local ladders = nearestArea:GetLadders()
             if ladders and #ladders > 0 then
                 local nearestLadder = nil
                 local nearestDist = math.huge
-                
+
                 for _, ladder in pairs(ladders) do
                     if IsValid(ladder) then
                         local ladderCenter = (ladder:GetTop() + ladder:GetBottom()) / 2
@@ -790,60 +790,62 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                         end
                     end
                 end
-                
+
                 if IsValid(nearestLadder) then
                     local ladderNormal = nearestLadder:GetNormal()
                     ladderYaw = (ladderNormal * -1):Angle().y
                 end
             end
         end
-        
+
         local finalAng = Angle(newPitch, ladderYaw, 0)
-        
+
         cmd:SetViewAngles(finalAng)
         ply:SetEyeAngles(finalAng)
-        
+
         cmd:SetForwardMove(200)
         cmd:SetSideMove(0)
-        
-        cmd:SetButtons(IN_FORWARD) 
-        
+
+        cmd:SetButtons(IN_FORWARD)
+
         return
     else
         data.ladderJumpTimer = nil
         data.ladderDirection = 0
     end
-    
+
     local distToTarget = botPos:DistToSqr(targetPos)
-    
-    local stopDistance = ITEM_PICKUP_RANGE * ITEM_PICKUP_RANGE 
+
+    local stopDistance = ITEM_PICKUP_RANGE * ITEM_PICKUP_RANGE
     if data.target:IsPlayer() and ply:Visible(data.target) then
         if data.target.BestFriend and ply.BestFriend then
             stopDistance = 300 * 300
         else
             local dist2D = (Vector(botPos.x, botPos.y, 0) - Vector(targetPos.x, targetPos.y, 0)):LengthSqr()
             distToTarget = dist2D
-            
-            if ply:GetActiveWeapon():GetClass() == "weapon_hl1_crowbar" or ply:GetActiveWeapon():GetClass() == "weapon_hl1_shotgun" then
-                stopDistance = COMBAT_RANGE * 3 
+
+            if ply:GetActiveWeapon():GetClass() == "weapon_hl1_crowbar" then
+                stopDistance = COMBAT_RANGE * 3
+            elseif ply:GetActiveWeapon():GetClass() == "weapon_hl1_shotgun" then
+                stopDistance = COMBAT_RANGE * 100
             else
                 stopDistance = COMBAT_RANGE * COMBAT_RANGE
             end
         end
     end
-    
+
     if distToTarget > stopDistance then
         local moveDir = (moveToPos - botPos):GetNormalized()
-        
+
         local viewForward = smoothAngle:Forward()
         local viewRight = smoothAngle:Right()
-        
+
         local fwdMove = moveDir:Dot(viewForward) * 400
         local sideMove = moveDir:Dot(viewRight) * 400
-        
+
         cmd:SetForwardMove(fwdMove)
         cmd:SetSideMove(sideMove)
-        
+
         local pathGoesUp = false
         if IsValid(data.target) then
             local destZ = data.target:GetPos().z
@@ -852,7 +854,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             end
             pathGoesUp = destZ > (botPos.z + 40)
         end
-        
+
         local nearbyButton = nil
         if pathGoesUp then
             for _, ent in ipairs(ents.FindInSphere(ply:GetShootPos(), 200)) do
@@ -863,13 +865,13 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 end
             end
         end
-        
+
         local useTrace = util.TraceLine({
             start = ply:GetShootPos(),
             endpos = ply:GetShootPos() + smoothAngle:Forward() * 90,
             filter = ply
         })
-        
+
         if useTrace.Hit and IsValid(useTrace.Entity) then
             local class = useTrace.Entity:GetClass()
             if string.find(class, "button") then
@@ -882,11 +884,11 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 end
             end
         end
-        
+
         if moveToPos.z > (botPos.z + 18) and botPos:DistToSqr(moveToPos) < 5000 and ply:GetMoveType() ~= MOVETYPE_LADDER then
             cmd:SetButtons(bit.bor(cmd:GetButtons(), IN_JUMP))
         end
-        
+
         local traceForward = util.TraceLine({
             start = botPos + Vector(0, 0, 15),
             endpos = botPos + smoothAngle:Forward() * 40 + Vector(0, 0, 15),
@@ -896,7 +898,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             cmd:SetButtons(bit.bor(cmd:GetButtons(), IN_JUMP))
 
         end
-        
+
         if curTime < (data.unstuckUntil or 0) or ply:GetVelocity():Length() < 2 and ply:GetMoveType() ~= MOVETYPE_LADDER then
             local unstuckAng = Angle(0, data.unstuckYaw or 0, 0)
             local unstuckDir = unstuckAng:Forward()
@@ -906,7 +908,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             cmd:SetSideMove(unstuckSide)
             cmd:SetButtons(bit.bor(cmd:GetButtons(), IN_JUMP))
         end
-        
+
         if data.path and data.path[1] and IsValid(data.path[1]) then
             if data.path[1]:HasAttributes(NAV_MESH_JUMP) then
                 cmd:SetButtons(bit.bor(cmd:GetButtons(), IN_JUMP))
@@ -918,7 +920,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                 cmd:SetButtons(bit.bor(cmd:GetButtons(), IN_DUCK))
             end
         end
-        
+
         local currentArea = navmesh.GetNearestNavArea(botPos)
         if IsValid(currentArea) and currentArea:HasAttributes(NAV_MESH_CROUCH) then
             cmd:SetButtons(bit.bor(cmd:GetButtons(), IN_DUCK))
@@ -931,7 +933,7 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
                     isJumpArea = true
                  end
             end
-            
+
             local isFarTarget = false
             if distToTarget > 500 * 500 and ply:OnGround() then
                  isFarTarget = true
@@ -945,13 +947,13 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             end
 
             if (isJumpArea or isFarTarget or isCombatJump) and ply:OnGround() and ply:GetVelocity():Length2D() > 200 then
-                 
+
                  if not data.doingLongJump then
                     cmd:SetButtons(bit.bor(cmd:GetButtons(), IN_DUCK))
                     cmd:SetButtons(bit.band(cmd:GetButtons(), bit.bnot(IN_JUMP)))
                     data.doingLongJump = true
                     data.longJumpTimer = CurTime() + 0.1
-                    
+
                     if isCombatJump then
                         data.nextCombatJump = CurTime() + math.random(2, 5)
                     end
@@ -968,24 +970,24 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
 
     else
         cmd:ClearMovement()
-        
+
         local isMate = data.target:IsPlayer() and data.target.BestFriend and ply.BestFriend
         local isVisible = data.target:IsPlayer() and not isMate and (ply:Visible(data.target) or ply:VisibleVec(data.target:GetShootPos()))
-        
+
         if isVisible then
-            
+
             local aimSpot = GetBestAimPosition(ply, data.target)
             local trace = util.TraceLine({
                 start = ply:GetShootPos(),
                 endpos = aimSpot,
                 filter = ply
             })
-            
+
             if not trace.Hit or trace.Entity == data.target then
                 local aimDir = (aimSpot - ply:GetShootPos()):GetNormalized()
                 local lookDir = cmd:GetViewAngles():Forward()
                 local dot = aimDir:Dot(lookDir)
-                
+
                 if dot > 0.9 then
                     cmd:SetButtons(bit.bor(cmd:GetButtons(), IN_ATTACK))
                 end
@@ -996,14 +998,14 @@ hook.Add("StartCommand", "SmartBot_AI", function(ply, cmd)
             end
 
             if curTime > (data.nextStrafe or 0) then
-                data.nextStrafe = curTime + math.Rand(0.2, 1) 
-                
+                data.nextStrafe = curTime + math.Rand(0.2, 1)
+
                 local roll = math.random(1, 3)
                 if roll == 1 then data.strafeDir = -400
                 elseif roll == 2 then data.strafeDir = 400
                 else data.strafeDir = 0 end
             end
-            
+
             cmd:SetSideMove(data.strafeDir or 0)
         end
     end
@@ -1060,15 +1062,12 @@ concommand.Add("hldm_addspecialbots", function(ply, cmd, args)
                 end
             end
 
-            if not found then
-                print("[hldm_addspecialbots] Не удалось найти нового бота для имени '" .. name .. "' — возможно, нет свободных слотов.")
-            end
-
             SpawnNext()
         end)
     end
 
     SpawnNext()
+    Maverick = true
 end)
 
 concommand.Add("hldm_removeallbots", function(ply, cmd, args)
@@ -1081,7 +1080,7 @@ end)
 hook.Add("PlayerInitialSpawn","ChoosePM",function(ply)
     if ply:IsBot() then
         local randPM = math.random(0, #modelFiles) or 1
-        if modelFiles[randPM] != nil then 
+        if modelFiles[randPM] != nil then
             ply.BotPM = "models/player/hl1/" .. modelFiles[randPM]
         else
             ply.BotPM = "models/player/hl1/player.mdl"

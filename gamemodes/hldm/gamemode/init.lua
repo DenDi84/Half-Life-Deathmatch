@@ -28,6 +28,7 @@ util.AddNetworkString( "killfied" )
 util.AddNetworkString("PlayerModel")
 
 CurRoundState = 0
+Maverick = false
 
 if not recentDeathPositions then
     recentDeathPositions = {}
@@ -113,7 +114,7 @@ hook.Add("OnEntityCreated", "HL1SWEPs_Replacements", function(ent)
 							end
 						end
 					end
-				end 
+				end
 			end)
 		end
 end)
@@ -131,7 +132,7 @@ local ifroundstarted = false
 local weaponUnlockTime = 0
 
 function GM:StartRound()
-    
+
     self:StartGameTimer()
     game.CleanUpMap()
 
@@ -207,7 +208,7 @@ function GM:DoPlayerDeath(ply,attacker, dmginfo)
     if isGibType then
 
         ply.allowgibs = true
-            
+
         local effectdata = EffectData()
         effectdata:SetOrigin(ply:GetPos())
         effectdata:SetMagnitude(dmginfo:GetDamage())
@@ -220,7 +221,7 @@ function GM:DoPlayerDeath(ply,attacker, dmginfo)
 end
 
 function GM:PlayerDeath(victim, inflictor, attacker)
-	
+
     victim.NextSpawnTime = CurTime() + 3
 
     if game.GetMap() == "hldm_crossfire" then
@@ -244,6 +245,27 @@ function GM:PlayerDeath(victim, inflictor, attacker)
         if attacker:Frags() >= fraglimit then
             self:EndGame()
         end
+    end
+
+    if Maverick then
+        local mavecount = 0
+        local rickcount = 0
+        local total = 0
+        for _, ply in player.Iterator() do
+            if ply:IsBot() and ply:GetNWBool("SpecialBotName") then
+                if ply:GetNWString("SpecialBotName") == "Mave" then
+                    mavecount = ply:Frags()
+                else
+                    rickcount = ply:Frags()
+                end
+            end
+        end
+
+        total = mavecount + rickcount
+        if total >= fraglimit then
+            self:EndGame()
+        end
+
     end
 
     local deathPos = victim:GetPos()
@@ -274,11 +296,11 @@ end
 
 function AreVectorsClose(vec1, vec2, tolerance)
 	tolerance = tolerance or 1
-    
+
     if vec1:Distance(vec2) <= tolerance then
         return true
     end
-    
+
     return false
 end
 
@@ -287,11 +309,11 @@ function GM:StartGameTimer()
 	local timeLeft = GetConVar("hldm_timelimit"):GetInt()
 
 	  timer.Create("MyGamemodeTimer", 1, 0, function()
-		
+
 
         if timeLeft > 0 then
             timeLeft = timeLeft - 1
-		else 
+		else
 			self:EndGame()
         end
 
@@ -311,14 +333,14 @@ end)
 
 function GM:PlayerUse(ply,ent)
 	if IsSpectator(ply) then
-        return false 
+        return false
     end
 end
 
 function GM:Initialize()
 
     for convar, value in pairs(self.Config) do
-        RunConsoleCommand(convar, value)     
+        RunConsoleCommand(convar, value)
     end
 
 	self:WaitingForPlayers()
@@ -329,23 +351,23 @@ function GM:ShutDown()
     for convar, value in pairs(self.Config) do
         local cconvar = GetConVar(convar)
         local default = cconvar:GetDefault()
-        RunConsoleCommand(convar, default)     
+        RunConsoleCommand(convar, default)
     end
 end
 
 function GM:PlayerDisconnected()
 
     timer.Simple(0.1, function()
-        self:CheckRoundEndConditions()   
-        self:CheckRoundStartConditions()  
+        self:CheckRoundEndConditions()
+        self:CheckRoundStartConditions()
 	end)
-	
+
 end
 
 --[[ function GM:CheckRoundStartConditions(force)
     if force != true then force = false end
     if CurRoundState == 1 and not force then
-        return 
+        return
     end
 
     local alivePlayers = 0
@@ -361,10 +383,10 @@ end
         CurRoundState = 3 --начало раунда
         self:UpdateRoundClient()
 
-        local a_self = self 
- 
+        local a_self = self
+
         timer.Create("RoundStartTimer", 13, 1, function()
-        
+
             local currentAlivePlayers = 0
             for _, ply in ipairs(player.GetAll()) do
                 if not IsSpectator(ply) then
@@ -380,7 +402,7 @@ end
         end)
 
 		 timer.Simple(10, function()
-            
+
             if CurRoundState != 1 and timer.Exists("RoundStartTimer") then
 				for _, ply in pairs(player.GetAll()) do
                     if ply:GetNWBool("IsSpectator", false) then continue end
@@ -413,7 +435,7 @@ function GM:CheckRoundStartConditions(force)
 
     if CurRoundState == 2 and not force then return end
 
-    CurRoundState = 3 
+    CurRoundState = 3
     self:UpdateRoundClient()
 
     if force then
@@ -422,7 +444,7 @@ function GM:CheckRoundStartConditions(force)
     end
 
     timer.Simple(10, function()
-        if CurRoundState != 3 then return end 
+        if CurRoundState != 3 then return end
 
         for _, ply in ipairs(player.GetAll()) do
             if IsSpectator(ply) == false then
@@ -448,7 +470,7 @@ cvars.AddChangeCallback("hldm_minplayers", function(name, old, new)
 end)
 
 function GM:CheckRoundEndConditions()
-    
+
     if CurRoundState != 1 then
         return
     end
@@ -487,20 +509,20 @@ end
 function GM:StartEndOfRoundCamera()
 
     local cameraPosition, cameraAngle = nil,nil
-    local curmap = game.GetMap() 
+    local curmap = game.GetMap()
 
     if EndPosOnMaps == nil then
-        
+
     elseif EndPosOnMaps[curmap] == nil then
 
     else
         cameraPosition = EndPosOnMaps[curmap].pos
-        cameraAngle = EndPosOnMaps[curmap].ang 
+        cameraAngle = EndPosOnMaps[curmap].ang
     end
-    
+
     if cameraPosition == nil then
-        local cameras = ents.FindByClass("point_camera") 
-        
+        local cameras = ents.FindByClass("point_camera")
+
         if #cameras > 0 then
             cameraPosition = cameras[1]:GetPos()
             cameraAngle = cameras[1]:GetAngles()
@@ -525,7 +547,7 @@ function GM:StopEndOfRoundCamera()
             ply:DrawViewModel(true)
         end
     end ]]
-    
+
     net.Start("RoundEndCamera_SetState")
     net.WriteBool(false)
     net.Broadcast()
@@ -544,9 +566,9 @@ end
 
 function GM:PlayerFootstep(ply, pos, foot, soundName, volume)
     if not IsValid(ply) or not ply:OnGround() then return end
-    
+
     if ply.NextFootstepTime and CurTime() < ply.NextFootstepTime then
-        return true 
+        return true
     end
 
     if ply.NoSteps == true then return true end
@@ -564,15 +586,15 @@ function GM:PlayerFootstep(ply, pos, foot, soundName, volume)
     local material = string.lower(util.GetSurfacePropName(tr.SurfaceProps))
     local customSounds = HLDM_SOUNDS.Footsteps[material]
     if customSounds == nil then customSounds = HLDM_SOUNDS.Footsteps["default"] end
-    
+
     if customSounds != nil then
         local chosenSound = table.Random(customSounds)
         ply:EmitSound(chosenSound, 75, 100, 1, CHAN_AUTO)
         return true
     else
-        return 
+        return
     end
-    
+
     return true
 end
 
@@ -581,7 +603,7 @@ hook.Add("KeyPress", "jumpcuston", function(ply, key)
     if key == IN_JUMP and ply:OnGround() then
         local pos = ply:GetPos()
         local tr = util.QuickTrace(pos, Vector(0, 0, -100), ply)
-        
+
         if tr.Hit then
             local material = string.lower(util.GetSurfacePropName(tr.SurfaceProps))
             local customSounds = HLDM_SOUNDS.Footsteps[material]
@@ -592,7 +614,7 @@ hook.Add("KeyPress", "jumpcuston", function(ply, key)
             end
         end
 
-        ply.NextFootstepTime = CurTime() + 0.25 
+        ply.NextFootstepTime = CurTime() + 0.25
     end
 
     if key == IN_SPEED then
@@ -627,7 +649,7 @@ function GM:ScalePlayerDamage( ply, hitgroup, dmginfo )
 	 if ( hitgroup == HITGROUP_HEAD ) then
 		dmginfo:ScaleDamage( 2 )
  	 else
-		dmginfo:ScaleDamage( 1 )  
+		dmginfo:ScaleDamage( 1 )
 	 end
 end
 
